@@ -386,10 +386,10 @@ def current_tab():
     }
 
 def _mark_tab():
-    """Prepend horse emoji to tab title so the user can see which tab the agent controls."""
+    """Mark the controlled tab (data-browser-harness-agent on <html>; max fork, was a 🐴 title prefix)."""
     if os.environ.get("BH_TAB_MARKER", "").strip().lower() in {"0", "false", "no", "off"}:
         return
-    try: cdp("Runtime.evaluate", expression="if(!document.title.startsWith('\U0001F434'))document.title='\U0001F434 '+document.title")
+    try: cdp("Runtime.evaluate", expression="document.documentElement.setAttribute('data-browser-harness-agent','')")
     except Exception: pass
 
 def _target_id(target):
@@ -409,15 +409,14 @@ def activate_tab(target):
 def switch_tab(target, activate=False):
     """Attach the agent without changing Chrome's visible tab by default.
 
-    Pass activate=True only when Chrome must visibly show the target. The horse
+    Pass activate=True only when Chrome must visibly show the target. The tab
     marker still moves to the attached target so the user can find it.
     """
     # Accept either a raw targetId string or the dict returned by current_tab() / list_tabs(),
     # so `switch_tab(current_tab())` works without a manual ["targetId"] dance.
     target_id = _target_id(target)
-    # Unmark old tab. Horse emoji is a surrogate pair in JS UTF-16 strings (2 code units),
-    # plus the trailing space = 3 code units, so slice(3) cleanly removes the prefix.
-    try: cdp("Runtime.evaluate", expression="if(document.title.startsWith('\U0001F434 '))document.title=document.title.slice(3)")
+    # Unmark old tab.
+    try: cdp("Runtime.evaluate", expression="document.documentElement.removeAttribute('data-browser-harness-agent')")
     except Exception: pass
     if activate:
         activate_tab(target_id)

@@ -127,7 +127,9 @@ TOGGLE_BOOT_GRACE = 12
 # Cancellation should make an in-flight CDP call finish immediately. Keep the
 # drain bounded anyway so shutdown fails closed if a client ignores cancellation.
 RECOVERY_CANCEL_DRAIN_TIMEOUT = 2
-TAB_MARKER_JS = "if(!document.title.startsWith('\U0001F434'))document.title='\U0001F434 '+document.title"
+# max fork: mark the controlled tab with an attribute instead of a 🐴 title
+# prefix. The agent-browser extension turns it into a pointer favicon.
+TAB_MARKER_JS = "document.documentElement.setAttribute('data-browser-harness-agent','')"
 
 
 def tab_marker_enabled():
@@ -732,7 +734,7 @@ class Daemon:
                 tasks.append(disable_old())
             tasks.append(self._enable_default_domains(new_session))
             await asyncio.gather(*tasks)
-            # 🐴 tab-marker title prefix is purely cosmetic — fire-and-forget so
+            # Tab marker is purely cosmetic — fire-and-forget so
             # it doesn't add to the synchronous IPC budget.
             self._schedule_tab_marker(new_session)
             return {"session_id": new_session}
