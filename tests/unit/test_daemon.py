@@ -684,6 +684,17 @@ def test_shutdown_closes_only_the_daemon_owned_tab(monkeypatch):
     assert d.target_id == "user-selected-tab"
 
 
+def test_release_target_keeps_a_handed_over_tab_out_of_shutdown_cleanup():
+    """A released dedicated tab is no longer the daemon's to close; other ids change nothing."""
+    d = daemon.Daemon()
+    d.dedicated_target_id = "daemon-tab"
+
+    assert asyncio.run(d.handle({"meta": "release_target", "target_id": "other-tab"})) == {"released": False}
+    assert d.dedicated_target_id == "daemon-tab"
+    assert asyncio.run(d.handle({"meta": "release_target", "target_id": "daemon-tab"})) == {"released": True}
+    assert d.dedicated_target_id is None
+
+
 def test_delayed_stale_request_follows_recovery_during_domain_enable(monkeypatch):
     """Publish the replacement before post-attach domain setup can yield."""
     class _RecoveryWindowCDP(_FakeCDP):

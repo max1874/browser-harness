@@ -739,6 +739,14 @@ class Daemon:
             self._schedule_tab_marker(new_session)
             return {"session_id": new_session}
         if meta == "pending_dialog": return {"dialog": self.dialog}
+        if meta == "release_target":
+            # Max fork: the agent handed this tab to the user (agent_helpers
+            # mark_tab), so shutdown must not close it as the daemon's own.
+            async with self._dedicated_target_lock:
+                released = bool(self.dedicated_target_id) and self.dedicated_target_id == req.get("target_id")
+                if released:
+                    self.dedicated_target_id = None
+            return {"released": released}
         if meta == "shutdown":
             # Flip the barrier synchronously with recovery registration, then
             # cancel/drain existing handlers. In particular, a CDP replay that
