@@ -571,6 +571,33 @@ def test_named_reattach_creates_replacement_only_when_tab_is_gone(monkeypatch):
     assert d.dedicated_target_id == "created-2"
 
 
+def test_named_stale_request_reports_closed_tab_instead_of_moving(monkeypatch):
+    """Max fork: input meant for a closed tab must not run in a replacement tab."""
+    class _ClosedTabCDP(_AttachCDP):
+        async def send_raw(self, method, params=None, session_id=None):
+            if method == "Runtime.evaluate" and session_id == "stale-session":
+                self.calls.append((method, params, session_id))
+                raise RuntimeError("Session with given id not found")
+            if method == "Target.getTargetInfo":
+                raise RuntimeError("No target with given id found")
+            return await super().send_raw(method, params, session_id)
+
+    monkeypatch.setattr(daemon, "NAME", "worker-a")
+    monkeypatch.setattr(daemon, "REMOTE_ID", None)
+    monkeypatch.setattr(daemon, "BROWSER_KIND", "cdp")
+    d = daemon.Daemon()
+    d.cdp = _ClosedTabCDP([{"targetId": "daemon-tab", "url": "about:blank", "type": "page"}])
+    d.session, d.target_id, d.dedicated_target_id = "stale-session", "closed-tab", "daemon-tab"
+
+    result = asyncio.run(d.handle({"method": "Runtime.evaluate", "params": {"expression": "1"}}))
+    current = asyncio.run(d.handle({"meta": "current_tab"}))
+
+    assert result["error"].startswith("tab_gone: this session's tab closed-tab was closed")
+    assert current["error"].startswith("tab_gone:")
+    assert d.cdp.created == 0
+    assert d.session == "stale-session"
+
+
 def test_concurrent_named_reattach_creates_one_replacement(monkeypatch):
     """Concurrent recovery after a user closes the tab shares one replacement."""
     class _ConcurrentAttachCDP(_AttachCDP):

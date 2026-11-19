@@ -524,6 +524,18 @@ class Daemon:
             await self._enable_default_domains(self.session)
         return pages[0]
 
+    async def _tab_gone(self):
+        """Max fork: a named daemon's tab was closed. Re-attaching elsewhere, as
+        attach_first_page() would, runs the caller's next click or key press in
+        another tab and reports success, so the caller is told instead."""
+        if NAME == "default" or REMOTE_ID or not self.target_id:
+            return False
+        targets = (await self.cdp.send_raw("Target.getTargets"))["targetInfos"]
+        return all(t["targetId"] != self.target_id for t in targets)
+
+    def _tab_gone_error(self):
+        return f"tab_gone: this session's tab {self.target_id} was closed; open another with new_tab() or switch_tab()"
+
     async def _close_inspect_tabs(self, targets):
         """Close chrome://inspect tabs left open by the permission recovery flow"""
         if not harness_opened_inspect():
@@ -691,7 +703,7 @@ class Daemon:
             try:
                 info = (await self.cdp.send_raw("Target.getTargetInfo", {"targetId": self.target_id}))["targetInfo"]
             except Exception:
-                return {"error": "cdp_disconnected"}
+                return {"error": self._tab_gone_error() if await self._tab_gone() else "cdp_disconnected"}
             return {"targetId": info.get("targetId"), "url": info.get("url", ""), "title": info.get("title", "")}
         if meta == "connection_status":
             if not self.target_id:
@@ -794,6 +806,8 @@ class Daemon:
                             return {"error": "daemon is shutting down"}
                         replacement_session = self._session_replacements.get(sid)
                         if replacement_session is None and sid == self.session:
+                            if await self._tab_gone():
+                                return {"error": self._tab_gone_error()}
                             log(f"stale session {sid}, re-attaching")
                             if not await self.attach_first_page(
                                 replaces_session=sid, enable_domains=False
